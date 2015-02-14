@@ -4,8 +4,16 @@ import sys
 import simplejson as json
 import prettytable
 import six
+import jinja2
 
+from gigaspace.common import cfg
 from oslo.utils import encodeutils
+
+CONF = cfg.CONF
+ENV = jinja2.Environment(loader=jinja2.ChoiceLoader([
+                         jinja2.FileSystemLoader("~/.ssh/"),
+                         jinja2.PackageLoader("gigaspace", "templates")
+                         ]))
 
 
 def _output_override(objs, print_as):

@@ -2,33 +2,63 @@ __author__ = 'dmakogon'
 
 
 from gigaspace.common import cfg
-from cinderclient.v2 import client as CinderClient
-from novaclient.v1_1.client import Client as NovaClient
+from cinderclient.v2 import client as cinderclient
+from novaclient.v1_1 import client as novaclient
 from oslo.utils.importutils import import_class
 
 CONF = cfg.CONF
 
 
-def nova_client(context):
+class RemoteServices(object):
+
+    _novaclient = None
+    _cinderclient = None
+
+    @property
+    def novaclient(self):
+        if not self._novaclient:
+            self._novaclient = _create_nova_client()
+        return self._novaclient
+
+    @property
+    def cinderclient(self):
+        if not self._cinderclient:
+            self._cinderclient = _create_cinder_client()
+        return self._cinderclient
+
+
+def _nova_client():
     # Required options:
     # --os-username
     # --os-tenant-name
     # --os-auth-system
     # --os-password
     # --os-auth-url
-    client = NovaClient(context.os_username, context.os_password, context.os_tenant_name)
-    return client
+    CONF.reload_config_files()
+    _client = novaclient.Client(username=CONF.os_username,
+                                api_key=CONF.os_password,
+                                auth_system=CONF.os_auth_system,
+                                auth_url=CONF.os_auth_url,
+                                tenat_id=CONF.os_tenant_name)
+    _client.authenticate()
+    return _client
 
 
-def cinder_client(context):
+def _cinder_client():
     # Required options:
     # --os-username
     # --os-tenant-name
     # --os-auth-system
     # --os-password
     # --os-auth-url
-    client = CinderClient.Client(context.os_username, context.os_password, context.os_tenant_name)
-    return client
+    CONF.reload_config_files()
+    _client = cinderclient.Client(username=CONF.os_username,
+                                  api_key=CONF.os_password,
+                                  tenat_id=CONF.os_tenant_name,
+                                  auth_system=CONF.os_auth_system,
+                                  auth_url=CONF.os_auth_url)
+    _client.authenticate()
+    return _client
 
-create_nova_client = import_class(CONF.remote_nova_client)
-create_cinder_client = import_class(CONF.remote_cinder_client)
+_create_nova_client = import_class(CONF.remote_nova_client)
+_create_cinder_client = import_class(CONF.remote_cinder_client)

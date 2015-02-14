@@ -1,75 +1,85 @@
-__author__ = 'dmakogon'
+__author__ = "denis_makogon"
 
-import argparse
+import six
 import sys
-import inspect
 
-from gigaspace.common import cfg
-from gigaspace.common import context
-from gigaspace.common import remote
-from gigaspace.common import utils
+from oslo_config import cfg
+
+from gigaspace.cmd import common
+from gigaspace.common import cfg as config
+from gigaspace.cinder_workflow import (
+    base as cinder_workflow)
 
 CONF = cfg.CONF
 
 
-class GigaspaceToolCommands(object):
+class Volumes(object):
 
-    def boot_volume(self, **kwargs):
-        """
-        Boots volume with given name and size
-        """
-        _context = context.RequestContext(**kwargs)
-        cinderclient = remote.create_cinder_client(_context)
+    def list(self, *args, **kwargs):
+        cinder = cinder_workflow.BaseCinderActions()
+        print(cinder.list_volumes())
 
-    def list_volumes(self, **kwargs):
-        _context = context.RequestContext(**kwargs)
-        cinderclient = remote.create_cinder_client(_context)
-        volumes = cinderclient.volumes.list()
-        for volume in volumes:
-            utils.print_dict(volume.__dict__)
+    @common.args("--size", dest="size")
+    @common.args("--display-name", dest="name")
+    @common.args("--config-file")
+    def create(self, size, name):
+        cinder = cinder_workflow.BaseCinderActions()
+        print(cinder.create_volume(size, name))
 
-    def show_volume(self, name_or_id, **kwargs):
-        pass
+    @common.args("--id-or-name", dest='id_or_name')
+    def show(self, id_or_name):
+        cinder = cinder_workflow.BaseCinderActions()
+        print(cinder.show_volume(id_or_name))
 
-    def attach_volume(self, **kwargs):
-        pass
 
-    def delete_volume(self, id, **kwargs):
-        pass
+class Instances(object):
 
-    def execute(self):
-        exec_method = getattr(self, CONF.action.name)
-        args = inspect.getargspec(exec_method)
-        args.args.remove('self')
-        kwargs = {}
-        for arg in args.args:
-            kwargs[arg] = getattr(CONF.action, arg)
-        exec_method(**kwargs)
+    @common.args('--volume-id', dest='volume_id')
+    @common.args('--instance-id', dest='instance_id')
+    @common.args('--device_path', dest='device_path', default='/dev/vdb')
+    def attach_volume(self, volume_id, instance_id, device_path):
+        print("good")
+
+    @common.args('--name', dest='name')
+    @common.args('--flavor', dest='flavor')
+    @common.args('--image_id', dest='image_id')
+    @common.args('--block-mapping-device', dest='block_device_mapping')
+    def boot(self, name, flavor, image_id, block_device_mapping):
+        print("good")
+
+
+CATS = {
+    'volumes': Volumes,
+    'instances': Instances
+}
+
+
+category_opt = cfg.SubCommandOpt('category',
+                                 title='Command categories',
+                                 help='Available categories',
+                                 handler=common.add_command_parsers(CATS))
 
 
 def main():
-
-    parser = argparse.ArgumentParser(description='Process some integers.')
-    # parser = parser.add_parser(
-    #     'list_volumes', description='List Cinder volumes.')
-    parser.add_argument("list_volumes")
-    subparser = parser.add_subparsers()
-    subparser.add_parser('--os-username')
-    subparser.add_parser('--os-tenant-name')
-    subparser.add_parser('--os-password')
-    subparser.add_parser('--os-auth-url')
-    subparser.add_parser('--os-auth-system')
+    """Parse options and call the appropriate class/method."""
+    CONF.register_cli_opt(category_opt)
+    config.parse_args(sys.argv)
+    fn = CONF.category.action_fn
+    fn_args = [arg.decode('utf-8') for arg in CONF.category.action_args]
+    fn_kwargs = {}
+    for k in CONF.category.action_kwargs:
+        v = getattr(CONF.category, 'action_kwarg_' + k)
+        if v is None:
+            continue
+        if isinstance(v, six.string_types):
+            v = v.decode('utf-8')
+        fn_kwargs[k] = v
 
     try:
-        args = parser.parse_args()
-        sys.exit(0)
-    except TypeError as e:
-        print("Possible wrong number of arguments supplied %s" % e)
-        sys.exit(2)
-    except Exception:
-        print("Command failed, please check log for more info.")
-        raise
-
+        ret = fn(*fn_args, **fn_kwargs)
+        return ret
+    except Exception as e:
+        print(str(e))
 
 if __name__ == "__main__":
     main()
