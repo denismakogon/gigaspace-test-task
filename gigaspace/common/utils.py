@@ -104,3 +104,11 @@ def print_list(objs, fields, formatters={}, order_by=None, obj_is_dict=False,
         order_by = fields[0]
     order_by = labels[order_by]
     _print(pt, order_by)
+
+
+def poll_until(pollster, expected_result=None, sleep_time=5):
+    import time
+    if not callable(pollster):
+        raise Exception("%s is not callable" % pollster.__name__)
+    while(pollster() != expected_result):
+        time.sleep(sleep_time)

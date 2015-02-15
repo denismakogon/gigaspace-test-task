@@ -1,10 +1,17 @@
 __author__ = 'denis_makogon'
 
 import argparse
+import six
 
 
-# Decorators for actions
 def args(*args, **kwargs):
+    """
+    Decorates commandline arguments for actions
+    :param args: sub-category commandline arguments
+    :param kwargs: sub-category commandline arguments
+    :return: decorator: object attribute setter
+    :rtype: callable
+    """
     def _decorator(func):
         func.__dict__.setdefault('args', []).insert(0, (args, kwargs))
         return func
@@ -12,8 +19,14 @@ def args(*args, **kwargs):
 
 
 def methods_of(obj):
-    """Get all callable methods of an object that don't start with underscore
-    returns a list of tuples of the form (method_name, method)
+    """
+    Get all callable methods of an object that don't
+    start with underscore (private attributes)
+    returns
+    :param obj: objects to get callable attributes from
+    :type obj: object
+    :return result: a list of tuples of the form (method_name, method)
+    :rtype: list
     """
     result = []
     for i in dir(obj):
@@ -23,8 +36,20 @@ def methods_of(obj):
 
 
 def add_command_parsers(categories):
-
+    """
+    Parses actions commandline arguments from each category
+    :param categories: commandline categories
+    :type categories: dict
+    :return: _subparser: commandline subparser
+    """
     def _subparser(subparsers):
+        """
+        Iterates over categories and registers action
+        commandline arguments for each category
+        :param subparsers: commandline subparser
+        :return: None
+        :rtype: None
+        """
         for category in categories:
             command_object = categories[category]()
 
@@ -57,3 +82,32 @@ def add_command_parsers(categories):
                                     help=argparse.SUPPRESS)
 
     return _subparser
+
+
+def _main(global_conf, local_conf, category_opt, cli_args):
+    """
+
+    :param global_conf: staged CONF
+    :param local_conf: tool conf
+    :param category_opt: subparser category options
+    :param cli_args: tool CLI arguments
+    :return:
+    """
+    global_conf.register_cli_opt(category_opt)
+    local_conf.parse_args(cli_args)
+    fn = global_conf.category.action_fn
+    fn_args = [arg.decode('utf-8') for arg in global_conf.category.action_args]
+    fn_kwargs = {}
+    for k in global_conf.category.action_kwargs:
+        v = getattr(global_conf.category, 'action_kwarg_' + k)
+        if v is None:
+            continue
+        if isinstance(v, six.string_types):
+            v = v.decode('utf-8')
+        fn_kwargs[k] = v
+
+    try:
+        ret = fn(*fn_args, **fn_kwargs)
+        return ret
+    except Exception as e:
+        print(str(e))

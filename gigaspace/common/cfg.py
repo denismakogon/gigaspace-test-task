@@ -14,6 +14,7 @@ common_opts = [
     cfg.StrOpt('os_tenant_name', default="demo"),
     cfg.StrOpt('os_auth_url', default="http://localhost:5000/v2.0/"),
     cfg.StrOpt('os_auth_system', default='keystone'),
+    cfg.StrOpt('os_region_name', default='RegionOne')
 ]
 
 CONF = cfg.CONF
