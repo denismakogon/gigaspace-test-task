@@ -10,7 +10,7 @@ common_opts = [
                default='gigaspace.common.remote._cinder_client',
                help='Client to send Cinder calls to.'),
     cfg.StrOpt('os_username', default="demo"),
-    cfg.StrOpt('os_password', "demo"),
+    cfg.StrOpt('os_password', default="demo"),
     cfg.StrOpt('os_tenant_name', default="demo"),
     cfg.StrOpt('os_auth_url', default="http://localhost:5000/v2.0/"),
     cfg.StrOpt('os_auth_system', default='keystone'),

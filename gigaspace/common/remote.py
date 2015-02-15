@@ -17,12 +17,16 @@ class RemoteServices(object):
     @property
     def novaclient(self):
         if not self._novaclient:
+            _create_nova_client = import_class(
+                CONF.remote_nova_client)
             self._novaclient = _create_nova_client()
         return self._novaclient
 
     @property
     def cinderclient(self):
         if not self._cinderclient:
+            _create_cinder_client = import_class(
+                CONF.remote_cinder_client)
             self._cinderclient = _create_cinder_client()
         return self._cinderclient
 
@@ -56,9 +60,7 @@ def _cinder_client():
                                   api_key=CONF.os_password,
                                   tenat_id=CONF.os_tenant_name,
                                   auth_system=CONF.os_auth_system,
-                                  auth_url=CONF.os_auth_url)
+                                  auth_url=CONF.os_auth_url,
+                                  region_name="RegionOne")
     _client.authenticate()
     return _client
-
-_create_nova_client = import_class(CONF.remote_nova_client)
-_create_cinder_client = import_class(CONF.remote_cinder_client)

@@ -7,6 +7,7 @@ from oslo_config import cfg
 
 from gigaspace.cmd import common
 from gigaspace.common import cfg as config
+from gigaspace.common import utils
 from gigaspace.cinder_workflow import (
     base as cinder_workflow)
 
@@ -16,20 +17,22 @@ CONF = cfg.CONF
 class Volumes(object):
 
     def list(self, *args, **kwargs):
+        attrs = ['id', 'description', 'size']
         cinder = cinder_workflow.BaseCinderActions()
-        print(cinder.list_volumes())
+        volumes = cinder.list_volumes()
+        utils.print_list(volumes, attrs)
 
     @common.args("--size", dest="size")
     @common.args("--display-name", dest="name")
-    @common.args("--config-file")
     def create(self, size, name):
         cinder = cinder_workflow.BaseCinderActions()
-        print(cinder.create_volume(size, name))
+        utils.print_dict(cinder.create_volume(size, name).__dict__)
 
     @common.args("--id-or-name", dest='id_or_name')
     def show(self, id_or_name):
         cinder = cinder_workflow.BaseCinderActions()
-        print(cinder.show_volume(id_or_name))
+        volume = cinder.show_volume(id_or_name)
+        utils.print_dict(volume.__dict__)
 
 
 class Instances(object):
