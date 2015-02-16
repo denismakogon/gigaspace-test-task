@@ -17,9 +17,20 @@ common_opts = [
     cfg.StrOpt('os_region_name', default='RegionOne')
 ]
 
+test_group = cfg.OptGroup("test_config", "Test config",
+                          help="Option that are required to "
+                               "execute real-mode tests")
+
+test_opts = [
+    cfg.StrOpt("test_flavor_id", default=2),
+    cfg.StrOpt("test_image_id")
+]
+
 CONF = cfg.CONF
 
 CONF.register_opts(common_opts)
+CONF.register_group(test_group)
+CONF.register_opts(test_opts, test_group)
 
 
 def parse_args(argv, default_config_files=None):

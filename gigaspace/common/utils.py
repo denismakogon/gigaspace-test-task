@@ -1,7 +1,6 @@
 __author__ = 'dmakogon'
 
 import sys
-import simplejson as json
 import prettytable
 import six
 import jinja2

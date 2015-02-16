@@ -26,7 +26,7 @@ class BaseCinderActions(remote.RemoteServices):
             volume = self.cinderclient.volumes.create(
                 int(size), name=name)
             return volume
-        except exceptions.ClientException as e:
+        except exceptions.ClientException:
             raise
 
     def show_volume(self, id_or_name):
@@ -40,7 +40,7 @@ class BaseCinderActions(remote.RemoteServices):
         try:
             volume = self.cinderclient.volumes.get(id_or_name)
             return volume
-        except exceptions.ClientException as e:
+        except exceptions.ClientException:
             raise
 
     def list_volumes(self):
@@ -51,5 +51,5 @@ class BaseCinderActions(remote.RemoteServices):
         """
         try:
             return self.cinderclient.volumes.list()
-        except exceptions.ClientException as e:
+        except exceptions.ClientException:
             raise

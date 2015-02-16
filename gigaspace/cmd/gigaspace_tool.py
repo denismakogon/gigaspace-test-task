@@ -82,8 +82,15 @@ class Instances(object):
         """
         nova = nova_workflow.BaseNovaActions()
         server = nova.boot(
-            name, flavor, image_id, volume_id)
-        utils.print_dict(server.__dict__)
+            name, flavor, image_id, volume_id)._info
+        del server['links']
+        utils.print_dict(server)
+
+    @common.args('--server-id', dest="server_id")
+    def delete(self, server_id):
+        nova = nova_workflow.BaseNovaActions()
+        nova.delete(server_id)
+        print(str("Server accepted for deletion."))
 
 
 CATS = {

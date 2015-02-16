@@ -1,16 +1,20 @@
 __author__ = 'denis_makogon'
 
+import proboscis
 from proboscis import asserts
-from proboscis import test
-from proboscis.decorators import time_out
+from proboscis import decorators
 
-from gigaspace.cinder_workflow import base
+
+from gigaspace.cinder_workflow import base as cinder_workflow
+from gigaspace.nova_workflow import base as nova_workflow
+from gigaspace.common import cfg
 from gigaspace.common import utils
 
 GROUP_WORKFLOW = 'gigaspace.cinder.volumes.api'
+CONF = cfg.CONF
 
 
-@test(groups=[GROUP_WORKFLOW])
+@proboscis.test(groups=[GROUP_WORKFLOW])
 class TestWorkflow(object):
     """
     This is a test suit that represents described workflow:
@@ -21,39 +25,37 @@ class TestWorkflow(object):
         - by id
         - by name
      - boot an instance:
-        - create SSH key pair
-        - create block device mapping:
-          - with preserve on delete
-        - assign SSH key pair to an instance
+        - format volume using cloudinit
      - poll until instance would reach ACTIVE state
-     - poll until can do ssh into an instance
-     - check if volume was mounted
-     - format volume
-     - detach volume
-        - poll until volume would reach 'available' state
+     - check volume and server attachments
      - delete an instance
         - poll until instance would gone away
         - check if volume was deleted
     """
 
     def __init__(self):
-        self.cinder_actions = base.BaseCinderActions()
-        self.nova_actions = None
+        self.cinder_actions = cinder_workflow.BaseCinderActions()
+        self.nova_actions = nova_workflow.BaseNovaActions()
         self.volume = None
         self.server = None
         self.volume_size, self.display_name, self.expected_status = (
             "1", "test_volume", "available")
+        self.server_name, self.flavor_id, self.image_id, = (
+            "test_server",
+            CONF.test_config.test_flavor_id,
+            CONF.test_config.test_image_id
+        )
 
     def _poll_volume_status(self, expected_status):
-        def _poller():
+        def _pollster():
             volume = self.cinder_actions.show_volume(self.volume.id)
             if volume.status in ("error", "failed"):
                 raise Exception("Volume is not in valid state")
             return volume.status == expected_status
-        return _poller
+        return _pollster
 
-    @test
-    @time_out(300)
+    @proboscis.test
+    @decorators.time_out(300)
     def test_create_volume(self):
         """
         - create volume:
@@ -69,7 +71,7 @@ class TestWorkflow(object):
         volume = self.cinder_actions.show_volume(self.volume.id)
         asserts.assert_equal(volume.status, self.expected_status)
 
-    @test(depends_on=[test_create_volume])
+    @proboscis.test(depends_on=[test_create_volume])
     def test_list_volumes(self):
         """
         - list volumes
@@ -77,7 +79,7 @@ class TestWorkflow(object):
         volumes = self.cinder_actions.list_volumes()
         asserts.assert_equal(len(volumes), 1)
 
-    @test(depends_on=[test_list_volumes])
+    @proboscis.test(depends_on=[test_list_volumes])
     def test_get_volume_by_its_name_or_id(self):
         """
         - get volume:
@@ -92,16 +94,80 @@ class TestWorkflow(object):
             pass
         asserts.assert_equal(volume.status, self.expected_status)
 
-    @test(depends_on=[test_get_volume_by_its_name_or_id])
+    def _poll_until_server_is_active(self, expected_status):
+        def _pollster():
+            server = self.nova_actions.get(self.server.id)
+            if server.status.upper() in ["ERROR", "FAILED"]:
+                raise Exception("Failed to spawn compute instance.")
+            return server.status == expected_status
+        return _pollster
+
+    @decorators.time_out(300)
+    @proboscis.test(depends_on=[test_get_volume_by_its_name_or_id])
     def test_boot_instance(self):
         """
         - boot an instance:
-            - create SSH key pair
-            - create block device mapping:
-                - with preserve on delete
-            - assign SSH key pair to an instance
             - poll until instance would reach ACTIVE state
-            - poll until can do ssh into an instance
-            - check if volume was mounted
+            - check attachments
         """
-        pass
+        try:
+            self.server = self.nova_actions.boot(self.server_name,
+                                                 self.flavor_id,
+                                                 self.image_id,
+                                                 self.volume.id)
+            utils.poll_until(self._poll_until_server_is_active("ACTIVE"),
+                             expected_result=True,
+                             sleep_time=1)
+            server = self.nova_actions.get(self.server.id)
+            asserts.assert_equal(server.status, "ACTIVE")
+        except Exception as e:
+            print(str(e))
+            raise proboscis.SkipTest("Failed to spawn an instance.")
+
+    @proboscis.test(depends_on=[test_boot_instance])
+    def test_server_and_volume_attachments(self):
+        """
+        - checks volume and server attachments
+        """
+        server = self.nova_actions.get(self.server.id)
+        server_attachment = getattr(
+            server, 'os-extended-volumes:volumes_attached').pop(0)
+        volume_id = server_attachment['id']
+        volume = self.cinder_actions.show_volume(self.volume.id)
+        volume_attachment = volume.attachments.pop(0)
+        server_id = volume_attachment['server_id']
+        asserts.assert_equal(server.id, server_id)
+        asserts.assert_equal(volume.id, volume_id)
+
+    def _poll_until_server_is_gone(self):
+        def _pollster():
+            try:
+                self.nova_actions.delete(self.server.id)
+            except Exception:
+                print("Instance is gone. Checking if volume still there.")
+                return True
+
+        return _pollster
+
+    def _poll_until_volume_is_gone(self):
+        def _pollster():
+            try:
+                self.cinder_actions.cinderclient.volumes.delete(
+                    self.server.id)
+            except Exception:
+                print("Instance is gone. Checking if volume still there.")
+                return True
+        return _pollster
+
+    @decorators.time_out(100)
+    @proboscis.test(depends_on=[test_server_and_volume_attachments])
+    def test_delete_instance(self):
+        """
+        - delete instance
+        """
+        utils.poll_until(self._poll_until_server_is_gone(),
+                         expected_result=True,
+                         sleep_time=1)
+        utils.poll_until(self._poll_until_volume_is_gone(),
+                         expected_result=True,
+                         sleep_time=1)

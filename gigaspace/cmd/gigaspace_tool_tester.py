@@ -1,9 +1,9 @@
 __author__ = 'denis_makogon'
 
 import sys
+import proboscis
+
 from oslo_config import cfg
-from proboscis import register
-from proboscis import TestProgram
 
 from gigaspace.cmd import common
 from gigaspace.common import cfg as config
@@ -17,9 +17,9 @@ class Tester(object):
     def functional(self):
         sys.argv = []
         sys.argv.append('--groups=functional')
-        register(groups=['functional'],
-                 depends_on_groups=[test_workflow.GROUP_WORKFLOW])
-        TestProgram(groups=['functional']).run_and_exit()
+        proboscis.register(groups=['functional'],
+                           depends_on_groups=[test_workflow.GROUP_WORKFLOW])
+        proboscis.TestProgram(groups=['functional']).run_and_exit()
 
 CATS = {
     'run': Tester

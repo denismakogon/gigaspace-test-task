@@ -53,3 +53,22 @@ class BaseNovaActions(remote.RemoteServices, templating.UserdataTemplate):
         except (Exception, nova_exceptions.ClientException,
                 cinder_exceptions.ClientException):
             raise
+
+    def delete(self, id):
+        try:
+            self.novaclient.servers.delete(id)
+        except nova_exceptions.ClientException:
+            raise
+
+    def get(self, id):
+        """
+        Retrives server if it exists
+        :param id: server ID
+        :type id: basestring
+        :return server
+        :rtype: novaclient.v1_1.servers.Server
+        """
+        try:
+            return self.novaclient.servers.get(id)
+        except nova_exceptions.NotFound:
+            raise

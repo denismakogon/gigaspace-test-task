@@ -18,14 +18,16 @@ class FakeServer(object):
         self.image_id = image_id
         self.flavor_ref = flavor_ref
         self.old_flavor_ref = None
-        self._current_status = "BUILD"
+        self._current_status = "BUILDING"
         self.volumes = volumes
         self.bdm = block_device_mapping
         info_vols = []
         for volume in self.volumes:
             info_vols.append({'id': volume.id})
             volume.set_attachment(id)
-        self.old_host = None
+        setattr(self,
+                'os-extended-volumes:volumes_attached',
+                info_vols)
 
     def delete(self):
         for volume in self.volumes:
@@ -33,6 +35,10 @@ class FakeServer(object):
             volume.delete_attachment(self.id)
             Cinder().delete(volume.id)
         self._current_status = "SHUTDOWN"
+
+    @property
+    def status(self):
+        return self._current_status
 
 
 class FakeBlockDeviceMappingInfo(object):
@@ -67,17 +73,11 @@ class Nova(object):
         server._current_status = "ACTIVE"
         return server
 
-    def _get_volumes_from_bdm(self, server):
+    def _get_volumes_from_bdm(self, block_device_mapping):
         volumes = []
-        if server.block_device_mapping is not None:
-            # block_device_mapping is a dictionary, where the key is the
-            # device name on the compute instance and the mapping info is a
-            # set of fields in a string, separated by colons.
-            # For each device, find the volume, and record the mapping info
-            # to another fake object and attach it to the volume
-            # so that the fake API can later retrieve this.
-            for device in server.block_device_mapping:
-                mapping = server.block_device_mapping[device]
+        if block_device_mapping is not None:
+            for device in block_device_mapping:
+                mapping = block_device_mapping[device]
                 (id, _type, size, delete_on_terminate) = mapping.split(":")
                 volume = self.volumes.get(id)
                 volume.mapping = FakeBlockDeviceMappingInfo(
@@ -85,11 +85,17 @@ class Nova(object):
                 volumes.append(volume)
         return volumes
 
+    def get(self, id):
+        return self.db[id]
+
     def list(self):
         return [v for (k, v) in self.db.items()]
 
     def delete(self, id):
-        del self.db[id]
+        if id not in self.db.keys():
+            raise nova_exceptions.NotFound("HTTP 404. Not Found.")
+        else:
+            del self.db[id]
 
 
 class FakeVolume(object):
@@ -117,12 +123,13 @@ class FakeVolume(object):
         return getattr(self, key)
 
     def set_attachment(self, server_id):
-        """Fake method we've added to set attachments. Idempotent."""
         for attachment in self.attachments:
             if attachment['server_id'] == server_id:
                 return  # Do nothing
         self.attachments.append({'server_id': server_id,
-                                 'device': self.device})
+                                 'device': self.device,
+                                 'id': self.id,
+                                 'volume_id': self.id})
 
     def delete_attachment(self, server_id):
         for attachment in self.attachments:
@@ -161,7 +168,10 @@ class Cinder(object):
         return [self.db[key] for key in self.db]
 
     def delete(self, id):
-        del self.db[id]
+        if id not in self.db.keys():
+            raise Exception
+        else:
+            del self.db[id]
 
 
 def fake_create_nova_client():
