@@ -9,6 +9,8 @@ from gigaspace.common import cfg as config
 from gigaspace.common import utils
 from gigaspace.cinder_workflow import (
     base as cinder_workflow)
+from gigaspace.nova_workflow import (
+    base as nova_workflow)
 
 CONF = cfg.CONF
 
@@ -23,7 +25,7 @@ class Volumes(object):
         :return: CLI representation of 'list of volumes'
         :rtype: None
         """
-        attrs = ['id', 'description', 'size']
+        attrs = ['id', 'size', 'name', 'status', 'bootable', 'attachments']
         cinder = cinder_workflow.BaseCinderActions()
         volumes = cinder.list_volumes()
         utils.print_list(volumes, attrs)
@@ -41,7 +43,9 @@ class Volumes(object):
         :rtype: None
         """
         cinder = cinder_workflow.BaseCinderActions()
-        utils.print_dict(cinder.create_volume(size, name).__dict__)
+        volume = cinder.create_volume(size, name)._info
+        del volume['links']
+        utils.print_dict(volume)
 
     @common.args("--id-or-name", dest='id_or_name')
     def show(self, id_or_name):
@@ -53,33 +57,18 @@ class Volumes(object):
         :rtype: None
         """
         cinder = cinder_workflow.BaseCinderActions()
-        volume = cinder.show_volume(id_or_name)
-        utils.print_dict(volume.__dict__)
+        volume = cinder.show_volume(id_or_name)._info
+        del volume['links']
+        utils.print_dict(volume)
 
 
 class Instances(object):
 
-    @common.args('--volume-id', dest='volume_id')
-    @common.args('--instance-id', dest='instance_id')
-    @common.args('--device_path', dest='device_path', default='/dev/vdb')
-    def attach_volume(self, volume_id, instance_id, device_path):
-        """
-        CLI representation of 'attach volume'
-        :param volume_id: volume ID
-        :type volume_id: basestring
-        :param instance_id: instance ID
-        :type instance_id: basestring
-        :param device_path: root FS device path
-        :return: CLI representation of 'attach volume'
-        :rtype: None
-        """
-        print("good")
-
     @common.args('--name', dest='name')
     @common.args('--flavor', dest='flavor')
-    @common.args('--image_id', dest='image_id')
-    @common.args('--block-mapping-device', dest='block_device_mapping')
-    def boot(self, name, flavor, image_id, block_device_mapping):
+    @common.args('--image-id', dest='image_id')
+    @common.args('--volume-id', dest='volume_id')
+    def boot(self, name, flavor, image_id, volume_id):
         """
         CLI representation of 'boot instance'
         :param name: instance name
@@ -88,12 +77,13 @@ class Instances(object):
         :type flavor: basestring
         :param image_id: Glance image id
         :type image_id: basestring
-        :param block_device_mapping: block mapping device
-        :type block_device_mapping: basestring
         :return: CLI representation of 'boot instance'
         :rtype: None
         """
-        print("good")
+        nova = nova_workflow.BaseNovaActions()
+        server = nova.boot(
+            name, flavor, image_id, volume_id)
+        utils.print_dict(server.__dict__)
 
 
 CATS = {

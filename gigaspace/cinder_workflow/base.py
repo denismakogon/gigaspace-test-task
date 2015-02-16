@@ -19,13 +19,14 @@ class BaseCinderActions(remote.RemoteServices):
         :type size basestring
         :param name: volume display name
         :type name: basestring
-        :return:
+        :return volume info
+        :rtype: dict
         """
         try:
-            return self.cinderclient.volumes.create(
-                int(size), display_name=name)
+            volume = self.cinderclient.volumes.create(
+                int(size), name=name)
+            return volume
         except exceptions.ClientException as e:
-            print(str(e))
             raise
 
     def show_volume(self, id_or_name):
@@ -33,12 +34,13 @@ class BaseCinderActions(remote.RemoteServices):
         Returns volume info by given ID or name
         :param id_or_name: volume ID or name
         :type id_or_name: basestring
-        :return:
+        :return volume info
+        :rtype: dict
         """
         try:
-            return self.cinderclient.volumes.get(id_or_name)
+            volume = self.cinderclient.volumes.get(id_or_name)
+            return volume
         except exceptions.ClientException as e:
-            print(str(e))
             raise
 
     def list_volumes(self):
@@ -50,5 +52,4 @@ class BaseCinderActions(remote.RemoteServices):
         try:
             return self.cinderclient.volumes.list()
         except exceptions.ClientException as e:
-            print(str(e))
             raise

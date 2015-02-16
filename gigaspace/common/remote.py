@@ -18,6 +18,8 @@ class RemoteServices(object):
     def novaclient(self):
         """
         Nova ReST client initializer
+        :return: authenticated novaclient
+        :rtype: novaclient.Client
         """
         if not self._novaclient:
             _create_nova_client = importutils.import_class(
@@ -29,6 +31,8 @@ class RemoteServices(object):
     def cinderclient(self):
         """
         Cinder ReST client initializer
+        :return: authenticated novaclient
+        :rtype: novaclient.Client
         """
         if not self._cinderclient:
             _create_cinder_client = importutils.import_class(
@@ -40,21 +44,15 @@ class RemoteServices(object):
 def _nova_client():
     """
     Instantiates Nova ReST client
-
     :return: authenticated novaclient
+    :rtype: novaclient.Client
     """
-    # Required options:
-    # --os-username
-    # --os-tenant-name
-    # --os-auth-system
-    # --os-password
-    # --os-auth-url*
     CONF.reload_config_files()
-    _client = novaclient.Client(username=CONF.os_username,
-                                api_key=CONF.os_password,
-                                auth_system=CONF.os_auth_system,
+    _client = novaclient.Client(CONF.os_username,
+                                CONF.os_password,
+                                CONF.os_tenant_name,
                                 auth_url=CONF.os_auth_url,
-                                project_id=CONF.os_tenant_name)
+                                timeout=40)
     _client.authenticate()
     return _client
 
@@ -63,19 +61,13 @@ def _cinder_client():
     """
     Instantiates Cinder ReST client
     :return: authenticated cinderclient
+    :rtype: cinderclient.Client
     """
-    # Required options:
-    # --os-username
-    # --os-tenant-name
-    # --os-auth-system
-    # --os-password
-    # --os-auth-url
     CONF.reload_config_files()
-    _client = cinderclient.Client(username=CONF.os_username,
-                                  api_key=CONF.os_password,
+    _client = cinderclient.Client(CONF.os_username,
+                                  CONF.os_password,
                                   project_id=CONF.os_tenant_name,
-                                  auth_system=CONF.os_auth_system,
                                   auth_url=CONF.os_auth_url,
-                                  region_name="RegionOne")
+                                  timeout=40)
     _client.authenticate()
     return _client

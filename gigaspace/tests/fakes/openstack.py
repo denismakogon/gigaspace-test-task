@@ -20,26 +20,25 @@ class FakeServer(object):
         self.old_flavor_ref = None
         self._current_status = "BUILD"
         self.volumes = volumes
+        self.bdm = block_device_mapping
         info_vols = []
         for volume in self.volumes:
             info_vols.append({'id': volume.id})
             volume.set_attachment(id)
-            volume.schedule_status("in-use", 1)
         self.old_host = None
-        setattr(self, 'OS-EXT-AZ:availability_zone', 'nova')
-
-        self._info = {'os:volumes': info_vols}
-        self.bdm = block_device_mapping
 
     def delete(self):
-        self.schedule_status = []
+        for volume in self.volumes:
+            volume._current_status = 'deleting'
+            volume.delete_attachment(self.id)
+            Cinder().delete(volume.id)
         self._current_status = "SHUTDOWN"
 
 
 class FakeBlockDeviceMappingInfo(object):
 
     def __init__(self, id, device, _type, size, delete_on_terminate):
-        self.volumeId = id
+        self.volume_id = id
         self.device = device
         self.type = _type
         self.size = size
@@ -55,28 +54,15 @@ class Nova(object):
         self.db = FAKE_SERVERS_DB
         self.volumes = Cinder()
 
-    def create(self, name, image_id, flavor_ref, files=None, userdata=None,
-               block_device_mapping=None, volume=None, security_groups=None,
-               availability_zone=None, nics=None, config_drive=False, keyname=None):
+    def create(self, name, image_id, flavor_ref, userdata=None,
+               block_device_mapping=None):
         id = "FAKE_%s" % uuid.uuid4()
         volumes = self._get_volumes_from_bdm(block_device_mapping)
         for volume in volumes:
             volume._current_status = 'in-use'
-        server = FakeServer(self, id, name, image_id, flavor_ref,
+        server = FakeServer(id, name, image_id, flavor_ref,
                             block_device_mapping, volumes)
         self.db[id] = server
-        if name.endswith('SERVER_ERROR'):
-            raise nova_exceptions.ClientException("Fake server create error.")
-
-        if availability_zone == 'BAD_ZONE':
-            raise nova_exceptions.ClientException("The requested availability "
-                                                  "zone is not available.")
-
-        if nics:
-            if 'port-id' in nics[0] and nics[0]['port-id'] == "UNKNOWN":
-                raise nova_exceptions.ClientException("The requested "
-                                                      "port-id is not "
-                                                      "available.")
 
         server._current_status = "ACTIVE"
         return server
@@ -100,31 +86,28 @@ class Nova(object):
         return volumes
 
     def list(self):
-        return [v for (k, v) in self.db.items() if self.can_see(v.id)]    def list(self):
-        return [v for (k, v) in self.db.items() if self.can_see(v.id)]
+        return [v for (k, v) in self.db.items()]
+
+    def delete(self, id):
+        del self.db[id]
+
 
 class FakeVolume(object):
 
-    def __init__(self, id, size, name, description, volume_type):
+    def __init__(self, id, size, name):
         self.attachments = []
         self.id = id
         self.size = size
         self.name = name
-        self.description = description
-        self._current_status = "BUILD"
+        self._current_status = "building"
         self.device = "vdb"
-        self.volume_type = volume_type
 
     def __repr__(self):
         msg = ("FakeVolume(id=%s, size=%s, name=%s, "
-               "description=%s, _current_status=%s)")
+               "_current_status=%s)")
         params = (self.id, self.size, self.name,
-                  self.description, self._current_status)
+                  self._current_status)
         return (msg % params)
-
-    @property
-    def availability_zone(self):
-        return "fake-availability-zone"
 
     @property
     def created_at(self):
@@ -166,40 +149,19 @@ class Cinder(object):
         else:
             return self.db[id]
 
-    def create(self, size, display_name=None,
-               description=None, volume_type=None):
+    def create(self, size, name=None, **kwargs):
         id = "FAKE_VOL_%s" % uuid.uuid4()
-        volume = FakeVolume(id, size, display_name,
-                            description, volume_type)
+        volume = FakeVolume(id, size, name)
         self.db[id] = volume
         volume._current_status = "available"
 
         return volume
 
-    def list(self, detailed=True):
+    def list(self):
         return [self.db[key] for key in self.db]
 
-    def delete_server_volume(self, server_id, volume_id):
-        volume = self.get(volume_id)
-        volume.device_path = None
-        volume.delete_attachment(server_id)
-        if volume._current_status != 'in-use':
-            raise Exception("Invalid volume status: "
-                            "expected 'in-use' but was '%s'" %
-                            volume._current_status)
-
-        volume._current_status = "available"
-
-    def create_server_volume(self, server_id, volume_id, device_path):
-        volume = self.get(volume_id)
-        volume.device_path = device_path
-        volume.set_attachment(server_id)
-        if volume._current_status != "available":
-            raise Exception("Invalid volume status: "
-                            "expected 'available' but was '%s'" %
-                            volume._current_status)
-
-        volume._current_status = "in-use"
+    def delete(self, id):
+        del self.db[id]
 
 
 def fake_create_nova_client():
