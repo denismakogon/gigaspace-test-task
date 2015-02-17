@@ -144,7 +144,7 @@ class TestWorkflow(object):
             try:
                 self.nova_actions.delete(self.server.id)
             except Exception:
-                print("Instance is gone. Checking if volume still there.")
+                print("\nInstance has gone.")
                 return True
 
         return _pollster
@@ -155,7 +155,7 @@ class TestWorkflow(object):
                 self.cinder_actions.cinderclient.volumes.delete(
                     self.server.id)
             except Exception:
-                print("Instance is gone. Checking if volume still there.")
+                print("Volume has gone.")
                 return True
         return _pollster
 
