@@ -60,6 +60,13 @@ class Nova(object):
         self.db = FAKE_SERVERS_DB
         self.volumes = Cinder()
 
+    def reboot(self, server_id, **kwargs):
+        import time
+        server = self.get(server_id)
+        server._current_status = "REBOOT"
+        time.sleep(5)
+        server._current_status = "ACTIVE"
+
     def create(self, name, image_id, flavor_ref, userdata=None,
                block_device_mapping=None):
         id = "FAKE_%s" % uuid.uuid4()
@@ -86,7 +93,10 @@ class Nova(object):
         return volumes
 
     def get(self, id):
-        return self.db[id]
+        if id not in self.db.keys():
+            raise nova_exceptions.NotFound(404)
+        else:
+            return self.db[id]
 
     def list(self):
         return [v for (k, v) in self.db.items()]
@@ -141,6 +151,8 @@ class FakeVolume(object):
     def status(self):
         return self._current_status
 
+    def delete(self):
+        Cinder().delete(self.id)
 
 FAKE_VOLUMES_DB = {}
 
@@ -152,7 +164,8 @@ class Cinder(object):
 
     def get(self, id):
         if id not in self.db.keys():
-            raise cinder_exceptions.NotFound("Volume not found", 404)
+            raise cinder_exceptions.NotFound(
+                404, message="Volume not found.")
         else:
             return self.db[id]
 
@@ -173,12 +186,45 @@ class Cinder(object):
         else:
             del self.db[id]
 
+    def create_server_volume(self, server_id, volume_id, device):
+        server = Nova().get(server_id)
+        volume = self.get(volume_id)
+        volumes = getattr(server, 'os-extended-volumes:volumes_attached')
+        volumes.append({'id': volume.id})
+        setattr(server,
+                'os-extended-volumes:volumes_attached',
+                volumes)
+        volume.device = device
+        volume.set_attachment(server_id)
+        if volume._current_status != "available":
+            raise Exception("Invalid volume status: "
+                            "expected 'available' but was '%s'" %
+                            volume._current_status)
+        volume._current_status = "in-use"
+
+    def delete_server_volume(self, server_id, volume_id):
+        server = Nova().get(server_id)
+        volumes = getattr(
+            server,
+            'os-extended-volumes:volumes_attached')
+        volumes.pop(volumes.index({'id': volume_id}))
+        setattr(server,
+                'os-extended-volumes:volumes_attached',
+                volumes)
+        volume = self.get(volume_id)
+        volume.delete_attachment(server_id)
+        if volume._current_status != 'in-use':
+            raise Exception("Invalid volume status: "
+                            "expected 'in-use' but was '%s'" %
+                            volume._current_status)
+        volume._current_status = "available"
+
 
 def fake_create_nova_client():
     class _fake_nova():
         def __init__(self):
             self.servers = Nova()
-
+            self.volumes = Cinder()
     return _fake_nova()
 
 
@@ -186,5 +232,4 @@ def fake_create_cinder_client():
     class _fake_cinder():
         def __init__(self):
             self.volumes = Cinder()
-
     return _fake_cinder()
