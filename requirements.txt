@@ -1,0 +1,8 @@
+pbr>=0.6,!=0.7,<1.0
+jinja2
+python-cinderclient
+python-novaclient
+oslo.config
+oslo.utils
+PrettyTable>=0.7,<0.8
+six

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+mkfs -t ext3 -m 5 /dev/vdb <<_EOF_
+
+_EOF_

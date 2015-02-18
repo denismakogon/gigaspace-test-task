@@ -1,1 +1,0 @@
-# gigaspace-test-task
